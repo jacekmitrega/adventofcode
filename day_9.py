@@ -26,7 +26,7 @@ def load_example_input():
 
 @functools.cache
 def load_input():
-    with open(f'input_{__file__.split('_')[-1].split('.')[0]}.txt', 'r') as file:
+    with open(f"input_{__file__.split('_')[-1].split('.')[0]}.txt", "r") as file:
         return parse_input_text(file.read())
 
 
