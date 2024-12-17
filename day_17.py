@@ -70,28 +70,7 @@ def calc_out_and_next_a(a):
 
     # The above translates to this Python code:
     a8 = a % 8
-    return (  ((a8)^3) ^ (a // (2 ** ((a8)^5)))  ) % 8,  a // 8
-
-
-# I stepped backwards through the input program and figured out, that register A
-# should be 3 for the last iteration to output 0 and exit the program.
-# So let's work backwards from there (skipping the last iteration done manually):
-
-# expected_outs_reversed = list(reversed(expected))[1:]
-# last_iter_a = {3}
-# for expected_out in expected_outs_reversed:
-#     next_iter_a = set()
-#     min_last_iter_a = min(last_iter_a)
-#     max_last_iter_a = max(last_iter_a)
-#     # This is still a lot of work, but I haven't figured out the exact formula.
-#     # The input code has `adv 3` doing int division of A by 8, so I'm going
-#     # to search the next value of A in the range of 8 times the previous values found.
-#     for n in range(min_last_iter_a * 8, max_last_iter_a * 9):
-#         o, na = calc_out_and_next_a(n)
-#         if o == expected_out and na in last_iter_a:
-#             print(n, o, na)
-#             next_iter_a.add(n)
-#     last_iter_a = next_iter_a
+    return (  ((a8)^3) ^ (a >> (a8^5))  ) % 8,  a // 8
 
 
 # Python version of my input code with some notes:
@@ -108,16 +87,16 @@ while True:
     # ^^ b = (a % 8) ^ 5
 
     # c = a // (2 ** b)
-    c = a // (2 ** b)  # last iter: before: a = 1-7 / b = 0,1,2,3,4,6,7 / 2**b = 1,2,4,8,16,64,128, so after c = 0-7
-    # ^^ c = a // (2 ** ((a % 8) ^ 5))
+    c = a >> b  # last iter: before: a = 1-7 / b = 0,1,2,3,4,6,7 / 2**b = 1,2,4,8,16,64,128, so after c = 0-7
+    # ^^ c = a >> ((a % 8) ^ 5)
 
     # b ^= 6
     # b ^= c (reordered, was below the next instruction)
     b = (b ^ 6) ^ c  # last iter: after b=0, before: b = 0,1,2,3,4,6,7, c = 0-7, so b = 0-7  # {(b^6)^c for c in [0, 1, 2, 3, 4, 5, 6, 7] for b in [0,1,2,3,4,6,7]}
-    # ^^ b = (((a % 8) ^ 5) ^ 6) ^ (a // (2 ** ((a % 8) ^ 5)))
+    # ^^ b = (((a % 8) ^ 5) ^ 6) ^ (a >> ((a % 8) ^ 5))
 
     # a //= 2 ** 3
-    a //= 8  # last iter: a = 0 after, so a = 1-7 before
+    a >>= 3  # last iter: a = 0 after, so a = 1-7 before
 
     # yield b % 8
     result.append(b % 8)  # last iter: b = 0
@@ -143,7 +122,7 @@ def run(reg_a, reg_b, reg_c, prog):
 
         match opcode:
             case 0:  # adv
-                reg_a //= 2 ** combo
+                reg_a >>= combo
             case 1:  # bxl
                 reg_b ^= operand
             case 2:  # bst
@@ -157,9 +136,9 @@ def run(reg_a, reg_b, reg_c, prog):
             case 5:  # out
                 yield combo % 8
             case 6:  # bdv
-                reg_b = reg_a // (2 ** combo)
+                reg_b = reg_a >> combo
             case 7:  # cdv
-                reg_c = reg_a // (2 ** combo)
+                reg_c = reg_a >> combo
 
         code_ptr += 1
 
@@ -177,3 +156,24 @@ def verify_task2(input):
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
+
+    # For part 2, I stepped backwards through the input program and figured out, that register A
+    # should be 3 for the last iteration to output 0 and exit the program.
+    # So let's work backwards from there (skipping the last iteration done manually):
+    _, _, _, prog = load_input()
+    expected_outs_reversed = list(reversed([b for a in prog for b in a]))[1:]
+    last_iter_a = {3}
+    for expected_out in expected_outs_reversed:
+        next_iter_a = set()
+        min_last_iter_a = min(last_iter_a)
+        max_last_iter_a = max(last_iter_a)
+        # This is still a lot of work, but I haven't figured out the exact formula.
+        # The input code has `adv 3` doing int division of A by 8, so I'm going
+        # to search the next value of A in the range of 8 times the previous values found.
+        for n in range(min_last_iter_a * 8, max_last_iter_a * 9):
+            o, na = calc_out_and_next_a(n)
+            if o == expected_out and na in last_iter_a:
+                print(n, o, na)
+                next_iter_a.add(n)
+        last_iter_a = next_iter_a
+
