@@ -1,4 +1,6 @@
 input*.txt
+*-in.txt
+*-in.zon
 /.vscode/
 
 # Byte-compiled / optimized / DLL files
