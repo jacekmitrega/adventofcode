@@ -34,8 +34,8 @@ pub fn main() !void {
         for (0..in_grid_size) |y| {
             for (0..in_grid_size) |x| {
                 if (in_grid[y][x] == '@') {
-                    inline for (0..adj_yx.len) |a| {
-                        const dy, const dx = adj_yx[a];
+                    inline for (adj_yx) |adj| {
+                        const dy, const dx = adj;
                         out_grid[y + dy][x + dx] +|= 1;
                     }
                 }
