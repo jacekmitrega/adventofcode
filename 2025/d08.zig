@@ -47,7 +47,7 @@ pub fn main() !void {
             const dx: u64 = @max(jb_to.x, jb_from.x) - @min(jb_to.x, jb_from.x);
             const dy: u64 = @max(jb_to.y, jb_from.y) - @min(jb_to.y, jb_from.y);
             const dz: u64 = jb_to.z - jb_from.z; // jboxes already sorted by z
-            const d: u64 = std.math.sqrt(dx * dx + dy * dy + dz * dz);
+            const d: u64 = dx * dx + dy * dy + dz * dz;
             const dist = &distances[dist_idx];
             dist.from_idx = @intCast(jb_from_idx);
             dist.to_idx = @intCast(jb_to_idx);
