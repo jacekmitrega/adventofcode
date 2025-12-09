@@ -36,7 +36,7 @@ pub fn main() !void {
     const jboxes = jboxes_buf[0..num_jboxes];
     std.sort.block(u64, @ptrCast(jboxes), {}, comptime std.sort.asc(u64)); // by z, y, x, id on LE
 
-    var distances_buf: [f_max_rows * f_max_rows]Connection = undefined;
+    var distances_buf: [(f_max_rows * (f_max_rows - 1)) >> 1]Connection = undefined;
     const num_distances = (num_jboxes * (num_jboxes - 1)) >> 1;
     const distances = distances_buf[0..num_distances];
     var dist_idx: usize = 0;
