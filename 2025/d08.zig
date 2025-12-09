@@ -41,7 +41,7 @@ pub fn main() !void {
             num_distances += 1;
         }
     }
-    std.sort.block(u64, @ptrCast(distances[0..num_distances]), {}, comptime std.sort.asc(u64)); // sort by d
+    std.mem.sortUnstable(u64, @ptrCast(distances[0..num_distances]), {}, comptime std.sort.asc(u64)); // sort by d
 
     var temp_jboxes_buf: @TypeOf(jboxes_buf) = undefined;
     const temp_jboxes = temp_jboxes_buf[0..num_jboxes];
