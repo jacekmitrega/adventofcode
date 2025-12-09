@@ -57,24 +57,21 @@ pub fn main() !void {
     }
     std.sort.block(u64, @ptrCast(distances), {}, comptime std.sort.asc(u64)); // sort by d
 
-    var circuit_sizes_buf: [f_max_rows]u32 = .{1} ** f_max_rows; // 0 will mean merged
-    const circuit_sizes = circuit_sizes_buf[0..num_jboxes];
-    var circuit_merges_buf: [f_max_rows]u10 = .{0} ** f_max_rows; // [from] = to circuit_id
-    const circuit_merges = circuit_merges_buf[0..num_jboxes];
-    var circuit_id_seq: u10 = 1;
-
     var temp_jboxes_buf: @TypeOf(jboxes_buf) = undefined;
     const temp_jboxes = temp_jboxes_buf[0..num_jboxes];
+
+    var circuit_sizes_buf: [f_max_rows]u32 = .{1} ** f_max_rows;
+    const circuit_sizes = circuit_sizes_buf[0..num_jboxes];
     var temp_circuit_sizes_buf: @TypeOf(circuit_sizes_buf) = undefined;
     const temp_circuit_sizes = temp_circuit_sizes_buf[0..num_jboxes];
-    var temp_circuit_merges_buf: @TypeOf(circuit_merges_buf) = undefined;
-    const temp_circuit_merges = temp_circuit_merges_buf[0..num_jboxes];
+
+    var circuit_id_seq: u10 = 1;
     var temp_circuit_id_seq: @TypeOf(circuit_id_seq) = undefined;
 
     const num_connections_p1 = 1000;
     const connections_p1 = distances[0..num_connections_p1];
 
-    process_connections(
+    build_circuits(
         jboxes,
         connections_p1,
         circuit_sizes,
@@ -84,13 +81,7 @@ pub fn main() !void {
     // part 1 only, so process in temp buffers:
     @memcpy(temp_jboxes, jboxes);
     @memcpy(temp_circuit_sizes, circuit_sizes);
-    @memcpy(temp_circuit_merges, circuit_merges);
-    process_circuits(
-        temp_jboxes,
-        connections_p1,
-        temp_circuit_sizes,
-        temp_circuit_merges,
-    );
+    merge_circuits(temp_jboxes, connections_p1, temp_circuit_sizes);
     std.sort.block(u32, temp_circuit_sizes[0..num_jboxes], {}, comptime std.sort.desc(u32));
     const result_1: usize = temp_circuit_sizes[0] * temp_circuit_sizes[1] * temp_circuit_sizes[2];
 
@@ -100,28 +91,24 @@ pub fn main() !void {
     var is_final_approach = false;
     var needs_reset = true;
 
-    const p2_jbox = blk: for (0..100) |_| {
+    const jbox = blk: for (0..100) |_| {
         if (needs_reset) {
             @memcpy(temp_jboxes, jboxes);
             @memcpy(temp_circuit_sizes, circuit_sizes);
             temp_circuit_id_seq = circuit_id_seq;
         }
-        @memcpy(temp_circuit_merges, circuit_merges);
 
         const n = lower + if (is_final_approach) 1 else (upper - lower) >> 1;
-        process_connections(
+
+        // might be discarded so process in temp buffers:
+        build_circuits(
             temp_jboxes,
             distances[lower..n],
             temp_circuit_sizes,
             &temp_circuit_id_seq,
         );
-        process_circuits(
-            temp_jboxes,
-            distances[0..n],
-            temp_circuit_sizes,
-            temp_circuit_merges,
-        );
 
+        merge_circuits(temp_jboxes, distances[0..n], temp_circuit_sizes);
         const max_circuit_size = std.sort.max(u32, temp_circuit_sizes[0..num_jboxes], {}, comptime std.sort.asc(u32)).?;
         if (max_circuit_size == 999) {
             is_final_approach = true;
@@ -131,9 +118,8 @@ pub fn main() !void {
             if (is_final_approach) break :blk distances[n - 1]; // FOUND!
             upper = n;
             needs_reset = true;
-        } else {
+        } else { // commit work done so far to non-temp buffers
             lower = n;
-            // commit work done so far:
             @memcpy(jboxes, temp_jboxes);
             @memcpy(circuit_sizes, temp_circuit_sizes);
             circuit_id_seq = temp_circuit_id_seq;
@@ -141,12 +127,11 @@ pub fn main() !void {
         }
     } else unreachable;
 
-    const jbf = &jboxes[p2_jbox.from_idx];
-    const jbt = &jboxes[p2_jbox.to_idx];
-    std.debug.print("{} {}\n", .{ result_1, @as(u64, @intCast(jbf.x)) * jbt.x });
+    const result_2 = @as(u64, @intCast(jboxes[jbox.from_idx].x)) * jboxes[jbox.to_idx].x;
+    std.debug.print("{} {}\n", .{ result_1, result_2 });
 }
 
-fn process_connections(
+fn build_circuits(
     jboxes: []JBox,
     connections: []const Connection,
     circuit_sizes: []u32,
@@ -165,16 +150,12 @@ fn process_connections(
         } else if (min_id == 0) {
             if (jb_from.id == 0) jb_from.id = max_id else jb_to.id = max_id;
             circuit_sizes[max_id] += 1;
-        }
+        } // else: merge circuits (handle later) or loop within a circuit (ignore)
     }
 }
 
-fn process_circuits(
-    jboxes: []JBox,
-    connections: []const Connection,
-    circuit_sizes: []u32,
-    circuit_merges: []u10,
-) void {
+fn merge_circuits(jboxes: []JBox, connections: []const Connection, circuit_sizes: []u32) void {
+    var circuit_merges: [f_max_rows]u10 = .{0} ** f_max_rows; // [from] = to circuit_id
     for (connections) |conn| {
         const jb_from = &jboxes[conn.from_idx];
         const jb_to = &jboxes[conn.to_idx];
