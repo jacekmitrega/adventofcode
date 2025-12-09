@@ -34,7 +34,6 @@ pub fn main() !void {
         num_jboxes += 1;
     }
     const jboxes = jboxes_buf[0..num_jboxes];
-    std.sort.block(u64, @ptrCast(jboxes), {}, comptime std.sort.asc(u64)); // by z, y, x, id on LE
 
     var distances_buf: [(f_max_rows * (f_max_rows - 1)) >> 1]Connection = undefined;
     const num_distances = (num_jboxes * (num_jboxes - 1)) >> 1;
@@ -44,10 +43,10 @@ pub fn main() !void {
         const jb_from = &jboxes[jb_from_idx];
         for (jb_from_idx + 1..num_jboxes) |jb_to_idx| {
             const jb_to = &jboxes[jb_to_idx];
-            const dx: u64 = @max(jb_to.x, jb_from.x) - @min(jb_to.x, jb_from.x);
-            const dy: u64 = @max(jb_to.y, jb_from.y) - @min(jb_to.y, jb_from.y);
-            const dz: u64 = jb_to.z - jb_from.z; // jboxes already sorted by z
-            const d: u64 = dx * dx + dy * dy + dz * dz;
+            const dx: i64 = @as(i64, @intCast(jb_to.x)) - jb_from.x;
+            const dy: i64 = @as(i64, @intCast(jb_to.y)) - jb_from.y;
+            const dz: i64 = @as(i64, @intCast(jb_to.z)) - jb_from.z;
+            const d: i64 = dx * dx + dy * dy + dz * dz;
             const dist = &distances[dist_idx];
             dist.from_idx = @intCast(jb_from_idx);
             dist.to_idx = @intCast(jb_to_idx);
