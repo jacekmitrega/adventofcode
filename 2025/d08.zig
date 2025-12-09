@@ -4,18 +4,8 @@ const f_name = "d08-in.txt";
 const f_max_size = 21000;
 const f_max_rows = 1000;
 
-const JBox = packed struct { // u64
-    id: u10,
-    x: u18,
-    y: u18,
-    z: u18,
-};
-
-const Connection = packed struct { // u64
-    from_idx: u10,
-    to_idx: u10,
-    d: u44,
-};
+const JBox = packed struct { id: u10, x: u18, y: u18, z: u18 };
+const Connection = packed struct { from_idx: u10, to_idx: u10, d: u44 };
 
 pub fn main() !void {
     var f = try std.fs.cwd().openFile(f_name, .{});
@@ -35,9 +25,8 @@ pub fn main() !void {
     }
     const jboxes = jboxes_buf[0..num_jboxes];
 
-    var distances_buf: [(f_max_rows * (f_max_rows - 1)) >> 1]Connection = undefined;
+    var distances: [(f_max_rows * (f_max_rows - 1)) >> 1]Connection = undefined;
     const num_distances = (num_jboxes * (num_jboxes - 1)) >> 1;
-    const distances = distances_buf[0..num_distances];
     var dist_idx: usize = 0;
     for (0..num_jboxes - 1) |jb_from_idx| {
         const jb_from = &jboxes[jb_from_idx];
@@ -54,13 +43,14 @@ pub fn main() !void {
             dist_idx += 1;
         }
     }
-    std.sort.block(u64, @ptrCast(distances), {}, comptime std.sort.asc(u64)); // sort by d
+    std.sort.block(u64, @ptrCast(distances[0..num_distances]), {}, comptime std.sort.asc(u64)); // sort by d
 
     var temp_jboxes_buf: @TypeOf(jboxes_buf) = undefined;
     const temp_jboxes = temp_jboxes_buf[0..num_jboxes];
 
     var circuit_sizes_buf: [f_max_rows]u32 = .{1} ** f_max_rows;
     const circuit_sizes = circuit_sizes_buf[0..num_jboxes];
+
     var temp_circuit_sizes_buf: @TypeOf(circuit_sizes_buf) = undefined;
     const temp_circuit_sizes = temp_circuit_sizes_buf[0..num_jboxes];
 
@@ -68,62 +58,51 @@ pub fn main() !void {
     var temp_circuit_id_seq: @TypeOf(circuit_id_seq) = undefined;
 
     const num_connections_p1 = 1000;
-    const connections_p1 = distances[0..num_connections_p1];
+    _ = build_circuits(jboxes, distances[0..num_connections_p1], 0, circuit_sizes, &circuit_id_seq);
 
-    build_circuits(
-        jboxes,
-        connections_p1,
-        circuit_sizes,
-        &circuit_id_seq,
-    );
-
-    // part 1 only, so process in temp buffers:
-    @memcpy(temp_jboxes, jboxes);
+    // part 1:
     @memcpy(temp_circuit_sizes, circuit_sizes);
-    merge_circuits(temp_jboxes, connections_p1, temp_circuit_sizes);
     std.sort.block(u32, temp_circuit_sizes[0..num_jboxes], {}, comptime std.sort.desc(u32));
     const result_1: usize = temp_circuit_sizes[0] * temp_circuit_sizes[1] * temp_circuit_sizes[2];
 
     // part 2:
+    @memcpy(temp_jboxes, jboxes);
+    @memcpy(temp_circuit_sizes, circuit_sizes);
+    temp_circuit_id_seq = circuit_id_seq;
+
     var lower: usize = num_connections_p1;
     var upper: usize = num_distances;
     var is_linear_approach = false; // set to true for linear instead of binary search
-    var needs_reset = true;
 
     const jbox = blk: for (0..num_distances) |_| {
-        if (needs_reset) {
-            @memcpy(temp_jboxes, jboxes);
-            @memcpy(temp_circuit_sizes, circuit_sizes);
-            temp_circuit_id_seq = circuit_id_seq;
-        }
-
         const n = lower + if (is_linear_approach) 1 else (upper - lower) >> 1;
         // std.debug.print("{} {} {}\n", .{ lower, n, upper });
 
-        // might be discarded so process in temp buffers:
-        build_circuits(
+        const max_circuit_size = build_circuits(
             temp_jboxes,
-            distances[lower..n],
+            distances[0..n],
+            lower,
             temp_circuit_sizes,
             &temp_circuit_id_seq,
         );
-
-        merge_circuits(temp_jboxes, distances[0..n], temp_circuit_sizes);
-        const max_circuit_size = std.sort.max(u32, temp_circuit_sizes[0..num_jboxes], {}, comptime std.sort.asc(u32)).?;
-        if (max_circuit_size == 999) {
-            is_linear_approach = true;
-            lower = n;
-            needs_reset = false;
-        } else if (max_circuit_size == 1000) {
-            if (is_linear_approach) break :blk distances[n - 1]; // FOUND!
-            upper = n;
-            needs_reset = true;
-        } else { // commit work done so far to non-temp buffers
-            lower = n;
-            @memcpy(jboxes, temp_jboxes);
-            @memcpy(circuit_sizes, temp_circuit_sizes);
-            circuit_id_seq = temp_circuit_id_seq;
-            needs_reset = false;
+        switch (max_circuit_size) {
+            999 => {
+                lower = n;
+                is_linear_approach = true;
+            },
+            1000 => {
+                if (is_linear_approach) break :blk distances[n - 1]; // FOUND!
+                upper = n;
+                @memcpy(temp_jboxes, jboxes);
+                @memcpy(temp_circuit_sizes, circuit_sizes);
+                temp_circuit_id_seq = circuit_id_seq;
+            },
+            else => {
+                lower = n;
+                @memcpy(jboxes, temp_jboxes);
+                @memcpy(circuit_sizes, temp_circuit_sizes);
+                circuit_id_seq = temp_circuit_id_seq;
+            },
         }
     } else unreachable;
 
@@ -134,10 +113,12 @@ pub fn main() !void {
 fn build_circuits(
     jboxes: []JBox,
     connections: []const Connection,
+    lower: usize,
     circuit_sizes: []u32,
     circuit_id_seq: *u10,
-) void {
-    for (connections) |conn| {
+) usize {
+    var max_circuit_size: usize = 0;
+    for (connections[lower..]) |conn| {
         const jb_from = &jboxes[conn.from_idx];
         const jb_to = &jboxes[conn.to_idx];
         const max_id = @max(jb_from.id, jb_to.id);
@@ -145,16 +126,14 @@ fn build_circuits(
         if (max_id == 0) {
             jb_from.id = circuit_id_seq.*;
             jb_to.id = circuit_id_seq.*;
-            circuit_sizes[circuit_id_seq.*] = 2;
+            circuit_sizes[circuit_id_seq.*] = 2; // not considered for max_circuit_size(!)
             circuit_id_seq.* += 1;
         } else if (min_id == 0) {
             if (jb_from.id == 0) jb_from.id = max_id else jb_to.id = max_id;
             circuit_sizes[max_id] += 1;
+            max_circuit_size = @max(max_circuit_size, circuit_sizes[max_id]);
         } // else: merge circuits (handle later) or loop within a circuit (ignore)
     }
-}
-
-fn merge_circuits(jboxes: []JBox, connections: []const Connection, circuit_sizes: []u32) void {
     var circuit_merges: [f_max_rows]u10 = .{0} ** f_max_rows; // [from] = to circuit_id
     for (connections) |conn| {
         const jb_from = &jboxes[conn.from_idx];
@@ -170,7 +149,9 @@ fn merge_circuits(jboxes: []JBox, connections: []const Connection, circuit_sizes
                 circuit_merges[source_id] = target_id;
                 circuit_sizes[target_id] += circuit_sizes[source_id];
                 circuit_sizes[source_id] = 0;
+                max_circuit_size = @max(max_circuit_size, circuit_sizes[target_id]);
             }
         }
     }
+    return max_circuit_size;
 }
