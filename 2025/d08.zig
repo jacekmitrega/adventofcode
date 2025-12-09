@@ -88,17 +88,18 @@ pub fn main() !void {
     // part 2:
     var lower: usize = num_connections_p1;
     var upper: usize = num_distances;
-    var is_final_approach = false;
+    var is_linear_approach = false; // set to true for linear instead of binary search
     var needs_reset = true;
 
-    const jbox = blk: for (0..100) |_| {
+    const jbox = blk: for (0..num_distances) |_| {
         if (needs_reset) {
             @memcpy(temp_jboxes, jboxes);
             @memcpy(temp_circuit_sizes, circuit_sizes);
             temp_circuit_id_seq = circuit_id_seq;
         }
 
-        const n = lower + if (is_final_approach) 1 else (upper - lower) >> 1;
+        const n = lower + if (is_linear_approach) 1 else (upper - lower) >> 1;
+        // std.debug.print("{} {} {}\n", .{ lower, n, upper });
 
         // might be discarded so process in temp buffers:
         build_circuits(
@@ -111,11 +112,11 @@ pub fn main() !void {
         merge_circuits(temp_jboxes, distances[0..n], temp_circuit_sizes);
         const max_circuit_size = std.sort.max(u32, temp_circuit_sizes[0..num_jboxes], {}, comptime std.sort.asc(u32)).?;
         if (max_circuit_size == 999) {
-            is_final_approach = true;
+            is_linear_approach = true;
             lower = n;
             needs_reset = false;
         } else if (max_circuit_size == 1000) {
-            if (is_final_approach) break :blk distances[n - 1]; // FOUND!
+            if (is_linear_approach) break :blk distances[n - 1]; // FOUND!
             upper = n;
             needs_reset = true;
         } else { // commit work done so far to non-temp buffers
